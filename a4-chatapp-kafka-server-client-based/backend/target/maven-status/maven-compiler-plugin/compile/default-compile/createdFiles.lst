@@ -1,0 +1,17 @@
+com\example\chatapp\dto\ChatMessage.class
+com\example\chatapp\service\KafkaProducerService.class
+com\example\chatapp\dto\JwtResponse.class
+com\example\chatapp\security\JwtUtils.class
+com\example\chatapp\dto\SignupRequest.class
+com\example\chatapp\controller\ChatController.class
+com\example\chatapp\dto\LoginRequest.class
+com\example\chatapp\config\WebSocketConfig.class
+com\example\chatapp\security\JwtAuthFilter.class
+com\example\chatapp\config\SecurityConfig.class
+com\example\chatapp\entity\User.class
+com\example\chatapp\config\KafkaTopicConfig.class
+com\example\chatapp\controller\AuthController.class
+com\example\chatapp\security\JwtChannelInterceptor.class
+com\example\chatapp\repository\UserRepository.class
+com\example\chatapp\ChatApplication.class
+com\example\chatapp\service\KafkaConsumerService.class

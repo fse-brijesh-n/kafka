@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="260" viewBox="0 0 800 260">
+  <style>
+    .box { fill:#f8fafc; stroke:#0f172a; stroke-width:1; }
+    .title { font: 16px sans-serif; fill:#0f172a; font-weight:700 }
+    .label { font: 13px sans-serif; fill:#0f172a }
+    .small { font:11px sans-serif; fill:#334155 }
+    .arrow { stroke:#0f172a; stroke-width:1.6; fill:none; marker-end:url(#arrowhead); }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#0f172a" />
+    </marker>
+  </defs>
+
+  <rect x="18" y="18" width="200" height="70" class="box" rx="8"/>
+  <text x="28" y="42" class="title">Producer</text>
+  <text x="28" y="62" class="small">writes events to topic</text>
+
+  <rect x="260" y="8" width="280" height="120" class="box" rx="8"/>
+  <text x="272" y="32" class="title">Topic: orders</text>
+  <text x="272" y="54" class="label">Partition 0</text>
+  <rect x="272" y="58" width="76" height="36" fill="#fff" stroke="#cbd5e1" rx="6"/>
+  <text x="356" y="54" class="label">Partition 1</text>
+  <rect x="356" y="58" width="76" height="36" fill="#fff" stroke="#cbd5e1" rx="6"/>
+  <text x="440" y="54" class="label">Partition 2</text>
+  <rect x="440" y="58" width="76" height="36" fill="#fff" stroke="#cbd5e1" rx="6"/>
+
+  <rect x="620" y="18" width="150" height="70" class="box" rx="8"/>
+  <text x="636" y="42" class="title">Consumer Group A</text>
+  <text x="636" y="62" class="small">consumers share partitions</text>
+
+  <path d="M218 52 L260 52" class="arrow"/>
+  <path d="M540 76 L620 76" class="arrow"/>
+
+  <text x="260" y="120" class="small">Note: Ordering guaranteed within a partition only.</text>
+</svg>
