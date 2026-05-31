@@ -1,430 +1,671 @@
-# Kafka Chat App
+# A4 ChatApp Kafka Server-Client Based
 
-Real-time chat application built with Spring Boot, Apache Kafka, Lit, JWT authentication, STOMP over SockJS, H2, Maven, Nginx, and Docker Compose.
+[![Java](https://img.shields.io/badge/Java-17%2B-blue?logo=openjdk)](https://www.oracle.com/java/technologies/javase/jdk17-archive-downloads.html)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-brightgreen?logo=springboot)](https://spring.io/projects/spring-boot)
+[![Kafka](https://img.shields.io/badge/Apache%20Kafka-Event%20Streaming-black?logo=apachekafka)](https://kafka.apache.org/)
+[![Vite](https://img.shields.io/badge/Vite-5.x-646CFF?logo=vite)](https://vitejs.dev/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)](https://docs.docker.com/compose/)
 
-## Preface
+## Table of Contents
 
-This document is written like a practical handbook. It explains not only how to run the project, but also why each piece exists, how the parts talk to each other, and what a learner should remember for interviews.
+- [Project Overview](#project-overview)
+- [How It Works](#how-it-works)
+- [Architecture](#architecture)
+- [Features](#features)
+- [Technology Stack](#technology-stack)
+- [Project Structure](#project-structure)
+- [Prerequisites](#prerequisites)
+- [Local Development](#local-development-without-docker)
+- [Docker Compose Deployment](#docker-compose-deployment)
+- [Hybrid Development Modes](#hybrid-development-modes)
+- [Kafka Configuration](#kafka-configuration)
+- [Environment Configuration](#environment-configuration)
+- [Common Commands](#common-commands)
+- [Troubleshooting](#troubleshooting)
+- [Production Deployment](#production-deployment)
+- [Contributing](#contributing)
+- [License](#license)
 
-If you want the wider Kafka theory guide, also see [../README.md](../README.md).
+## Project Overview
 
-## How To Read This Guide
+A4 ChatApp Kafka Server-Client Based is a full-stack real-time chat application built around event-driven communication. Users can sign up, log in, join a room, and exchange messages that are delivered instantly through WebSocket/STOMP and Kafka.
 
-If you are a beginner, read it in order.
+The backend is a Spring Boot service that handles authentication, WebSocket messaging, Kafka publishing, and Kafka consumption. The frontend is a Vite-based single-page app served through Nginx in Docker and connected to the backend through `/api` and `/ws` endpoints. Apache Kafka provides the asynchronous event backbone, while Zookeeper coordinates the broker when Kafka is run in the classic distributed setup used by this project.
 
-1. Start with the architecture and the story of the app.
-2. Then learn the setup and run steps.
-3. After that, study the file-by-file walkthrough.
-4. Finally, use the interview section as revision notes.
+This repository supports two primary operating styles:
 
-If you already know Kafka, you can jump directly to the chapters that interest you.
+- local development without Docker
+- Docker Compose deployment for the full stack
 
-## Chapter 1: What This Project Is
+It also supports hybrid setups when Kafka networking is configured correctly.
 
-This is a real-time chat system where users can sign up, log in, join a room, and send messages that reach other users immediately.
+## How It Works
 
-The interesting part is the message path:
+1. A user signs up or logs in through the frontend.
+2. Spring Security and JWT protect the REST and WebSocket channels.
+3. The frontend connects to `/ws` using SockJS and STOMP.
+4. Messages are sent to the backend over WebSocket.
+5. The backend publishes chat events to Kafka.
+6. A Kafka consumer receives the event and rebroadcasts it to the room topic.
+7. Connected clients receive the update in real time.
 
-- the browser sends chat text over STOMP
-- the backend secures the request with JWT
-- the backend publishes the message to Kafka
-- a Kafka consumer rebroadcasts the message to the room topic
-- connected clients receive the update in real time
+## Architecture
 
-So this is not just a chat app. It is a small example of event-driven architecture in action.
-
-## Chapter 2: What You Learn From It
-
-This project teaches several important ideas at the same time:
-
-- how to build login and signup APIs
-- how JWT protects a system without server sessions
-- how WebSocket keeps a connection open for live updates
-- how STOMP organizes real-time messages
-- how Kafka decouples the sender from the receiver
-- how a frontend can feel instant using optimistic UI
-- how Docker Compose turns a multi-service system into one command
-
-## Chapter 3: The System Architecture
+### High-Level Flow
 
 ```mermaid
 flowchart LR
-	U[Browser / Lit UI] -->|POST /api/auth/*| B[Spring Boot Backend]
-	U -->|STOMP over SockJS /ws| W[WebSocket Endpoint]
-	W --> C[Chat Controller]
-	C --> K[Kafka Topic: chat-messages]
-	K --> P[Kafka Consumer]
-	P --> S[SimpMessagingTemplate]
-	S --> U
-	B --> H[(H2 Database)]
+  U[Browser / Frontend SPA] -->|POST /api/auth/*| B[Spring Boot Backend]
+  U -->|SockJS + STOMP /ws| W[WebSocket Endpoint]
+  W --> C[Chat Controller]
+  C --> P[Kafka Producer]
+  P --> K[(Kafka Topic: chat-messages)]
+  K --> S[Kafka Consumer Service]
+  S --> M[SimpMessagingTemplate]
+  M --> U
+  B --> D[(H2 Database)]
 ```
 
-Think of the architecture as two layers:
+### Local Mode
 
-- **control layer:** signup, login, token creation, and security
-- **message layer:** websocket send, Kafka publish, Kafka consume, and room broadcast
+```mermaid
+flowchart LR
+  F[Frontend on localhost:5173] --> B[Backend on localhost:8080]
+  B --> K[Kafka on localhost:9092]
+  K --> Z[Zookeeper on localhost:2181]
+```
 
-That separation is one reason the design is easy to understand and scale.
+### Docker Mode
 
-## Chapter 4: Technology Choices
+```mermaid
+flowchart LR
+  F[Frontend Container :80] --> B[Backend Container :8080]
+  B --> K[Kafka Container :9092]
+  K --> Z[Zookeeper Container :2181]
+```
 
-### Backend
+### Hybrid Mode
 
-Spring Boot is used because it gives a fast, opinionated way to build secure Java services.
+```mermaid
+flowchart LR
+  F[Local Frontend] --> B[Local or Containerized Backend]
+  B --> K[Kafka Local or Containerized]
+```
 
-- Spring Security protects REST and WebSocket access
-- Spring WebSocket handles live communication
-- Spring Kafka connects the app to Kafka topics
-- JPA and H2 keep the data layer simple for learning
+> **Note:** Hybrid Kafka networking only works when the broker advertises an address that the backend can actually reach. See [Kafka Configuration](#kafka-configuration).
+
+## Features
+
+- Real-time messaging with WebSocket and STOMP
+- Kafka-backed event streaming for decoupled message delivery
+- JWT-based authentication and authorization
+- Room-based chat subscriptions
+- Dockerized deployment with Docker Compose
+- Scalable service separation between UI, API, and messaging
+- Responsive frontend suitable for desktop and mobile layouts
+- H2 database for lightweight local persistence and quick development
+
+## Technology Stack
 
 ### Frontend
 
-Lit is used because it is lightweight and easy to reason about.
+- Vite for development and build tooling
+- TypeScript for type safety
+- Lit for the component-based SPA in this repository
+- SockJS and STOMP for WebSocket connectivity
+- Nginx for production serving in Docker
 
-- TypeScript improves safety
-- Vite gives a fast development loop
-- STOMP and SockJS connect the UI to the backend
+### Backend
 
-### Infrastructure
+- Spring Boot 3.x
+- Spring Web
+- Spring Security
+- Spring WebSocket
+- Spring Kafka
+- Spring Data JPA
+- H2 database
 
-Docker Compose is used to keep the learning environment repeatable.
+### Messaging
 
-- Kafka runs in a container
-- Backend runs in a container
-- Frontend runs in a container behind Nginx
+- Apache Kafka
+- Apache Zookeeper
+- Kafka producer/consumer pattern
 
-## Chapter 5: Project Structure
+### Containerization
 
-- [backend/](backend/) Spring Boot application
-- [frontend/](frontend/) Lit frontend and Nginx config
-- [docker-compose.yml](docker-compose.yml) local orchestration for Kafka, backend, and frontend
+- Docker
+- Docker Compose
+- Nginx reverse proxy
 
-## Chapter 6: How The Message Flows
+### Build Tools
 
-### Step 1: A user logs in
+- Maven 3.9+
+- npm
+- TypeScript compiler
+- Vite build pipeline
 
-`POST /api/auth/login` returns a JWT. The frontend stores it in memory.
+## Project Structure
 
-### Step 2: The WebSocket connects
+Generated output folders such as `backend/target/` and `frontend/dist/` are omitted below because they are build artifacts.
 
-The frontend opens `/ws` using SockJS and sends the JWT in the STOMP CONNECT headers.
+```text
+.
+├── docker-compose.yml
+├── README.md
+├── backend/
+│   ├── Dockerfile
+│   ├── pom.xml
+│   └── src/
+│       └── main/
+│           ├── java/
+│           │   └── com/example/chatapp/
+│           │       ├── ChatApplication.java
+│           │       ├── config/
+│           │       │   ├── KafkaTopicConfig.java
+│           │       │   ├── SecurityConfig.java
+│           │       │   └── WebSocketConfig.java
+│           │       ├── controller/
+│           │       │   ├── AuthController.java
+│           │       │   └── ChatController.java
+│           │       ├── dto/
+│           │       │   ├── ChatMessage.java
+│           │       │   ├── JwtResponse.java
+│           │       │   ├── LoginRequest.java
+│           │       │   └── SignupRequest.java
+│           │       ├── entity/
+│           │       │   └── User.java
+│           │       ├── repository/
+│           │       │   └── UserRepository.java
+│           │       ├── security/
+│           │       │   ├── JwtAuthFilter.java
+│           │       │   ├── JwtChannelInterceptor.java
+│           │       │   └── JwtUtils.java
+│           │       └── service/
+│           │           ├── KafkaConsumerService.java
+│           │           └── KafkaProducerService.java
+│           └── resources/
+│               └── application.yml
+└── frontend/
+    ├── Dockerfile
+    ├── index.html
+    ├── nginx.conf
+    ├── package.json
+    ├── package-lock.json
+    ├── tsconfig.json
+    ├── vite.config.ts
+    └── src/
+        ├── chat-app.ts
+        ├── chat-page.ts
+        ├── login-page.ts
+        ├── main.ts
+        └── shim.ts
+```
 
-### Step 3: A message is sent
+### Directory Purpose
 
-The user types a message and sends it to `/app/chat.send`.
+- `backend/`: Spring Boot API, WebSocket gateway, Kafka producer, and Kafka consumer
+- `frontend/`: Browser UI, Vite development server, and Nginx production image
+- `docker-compose.yml`: Orchestrates Zookeeper, Kafka, backend, and frontend together
+- `backend/src/main/resources/`: Spring Boot runtime configuration
+- `frontend/src/`: UI components, app bootstrap, and browser compatibility code
 
-### Step 4: The backend processes it
+## Prerequisites
 
-The backend fills in the sender, room, and timestamp, then sends the event to Kafka.
+Before running the application, install the following:
 
-### Step 5: The room receives it
-
-The Kafka consumer publishes the same message to `/topic/chat.{roomId}`.
-
-### Step 6: The frontend renders it
-
-The Lit UI subscribes to the room topic and shows the message.
-
-This is the core story of the project.
-
-## Chapter 7: Key Features
-
-- JWT-secured authentication
-- Room-based chat rooms
-- Kafka-backed message pipeline
-- Optimistic UI so messages appear instantly
-- Message deduplication with `messageId`
-- H2 console for quick inspection
-- Dockerized local environment
-
-## Chapter 8: API Endpoints
-
-### REST
-
-- `POST /api/auth/signup`
-- `POST /api/auth/login`
-
-### WebSocket / STOMP
-
-- WebSocket endpoint: `/ws`
-- Send message: `/app/chat.send`
-- Subscribe to room: `/topic/chat.{roomId}`
-
-### Useful URLs
-
-- Frontend: `http://localhost`
-- Backend: `http://localhost:8080`
-- H2 console: `http://localhost:8080/h2-console`
-
-## Chapter 9: Step-by-Step Learning Path
-
-### 1. Learn the problem first
-
-Real-time chat is hard because messages must be delivered quickly, securely, and to the right people.
-
-### 2. Learn authentication
-
-You first create users, hash passwords, and return JWTs after login.
-
-### 3. Learn WebSocket and STOMP
-
-WebSocket keeps the channel open. STOMP gives structure to messages and subscriptions.
-
-### 4. Learn Kafka basics
-
-Kafka acts as the event backbone. Producers write to topics. Consumers read from them.
-
-### 5. Connect WebSocket to Kafka
-
-The chat message enters through STOMP and leaves through Kafka.
-
-### 6. Learn frontend state handling
-
-The UI shows the message immediately, then deduplicates future Kafka echoes using `messageId`.
-
-### 7. Learn Dockerization
-
-Docker makes the entire system portable and easy to run.
-
-### 8. Learn production thinking
-
-You learn how to handle broker downtime, startup order, and multiple users.
-
-## Chapter 10: Local Setup
-
-### Prerequisites
-
-- Java 17+
-- Node.js 18+
+- Java 17 or later
+- Maven 3.9 or later
+- Node.js 20 or later
 - Docker Desktop
 - Docker Compose
 
-### Open the project
+> **Tip:** If you plan to run only the local mode, Docker is still useful for Kafka, but it is not required for the application itself.
 
-```bash
-cd a4-chatapp-kafka-server-client-based
+## Local Development Without Docker
+
+This mode runs each service directly on your machine.
+
+### 1) Start Zookeeper
+
+From your Kafka installation directory, start Zookeeper first.
+
+Windows:
+
+```powershell
+bin\windows\zookeeper-server-start.bat config\zookeeper.properties
 ```
 
-## Chapter 11: Run With Docker Compose
-
-This is the recommended path for most users.
+Unix/macOS:
 
 ```bash
-docker compose up --build
+bin/zookeeper-server-start.sh config/zookeeper.properties
 ```
 
-What this does:
+Expected URL:
 
-- starts Kafka
-- starts the backend
-- starts the frontend
-- links the services together
+- `localhost:2181`
 
-Then open:
+### 2) Start Kafka
 
-```text
-http://localhost
+After Zookeeper is running, start Kafka.
+
+Windows:
+
+```powershell
+bin\windows\kafka-server-start.bat config\server.properties
 ```
 
-## Chapter 12: Run Without Docker
-
-This section is for learning each layer separately.
-
-### Start Kafka
-
-Run Kafka locally or in Docker and make sure it is available at `localhost:9092`.
-
-### Start the backend
+Unix/macOS:
 
 ```bash
+bin/kafka-server-start.sh config/server.properties
+```
+
+For local development, Kafka must be reachable at `localhost:9092`.
+
+> **Warning:** If Kafka advertises the wrong host or port, the backend may connect initially and then fail when the broker returns connection metadata. See the Kafka configuration section below.
+
+### 3) Configure Spring Boot for `localhost:9092`
+
+The repository already defaults to `localhost:9092` in `backend/src/main/resources/application.yml`.
+
+If you want to override it temporarily, set an environment variable before starting the backend:
+
+Windows PowerShell:
+
+```powershell
+$env:SPRING_KAFKA_BOOTSTRAP_SERVERS='localhost:9092'
+```
+
+Windows CMD:
+
+```cmd
+set SPRING_KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+```
+
+### 4) Start the Backend
+
+```powershell
 cd backend
-./mvnw spring-boot:run
+mvn spring-boot:run
 ```
 
-On Windows:
+Expected URLs:
 
-```bash
-cd backend
-mvnw.cmd spring-boot:run
-```
+- Backend: `http://localhost:8080`
+- H2 console: `http://localhost:8080/h2-console`
 
-### Start the frontend
+### 5) Start the Frontend
 
-```bash
+```powershell
 cd frontend
 npm install
 npm run dev
 ```
 
-### Point the backend to another Kafka address
+Expected URL:
 
-```bash
-SPRING_KAFKA_BOOTSTRAP_SERVERS=host:port
+- Frontend: `http://localhost:5173`
+
+### 6) Verify the Application
+
+1. Open `http://localhost:5173`.
+2. Sign up a new user.
+3. Log in with the same user.
+4. Open a second tab or private window.
+5. Sign up or log in with another user.
+6. Join the same room, such as `lobby`.
+7. Send messages from both sides.
+8. Confirm that messages appear in real time.
+
+### Expected Endpoints
+
+- REST login: `/api/auth/login`
+- REST signup: `/api/auth/signup`
+- WebSocket endpoint: `/ws`
+- Chat topic: `/topic/chat.{roomId}`
+
+## Docker Compose Deployment
+
+This is the easiest way to run the full stack consistently.
+
+### 1) Build Containers
+
+```powershell
+docker compose build
 ```
 
-## Chapter 13: How To Test The App
+### 2) Start Services
 
-1. Open the app in one browser tab.
-2. Sign up a new user.
-3. Log in.
-4. Open a second tab or incognito window.
-5. Sign up and log in with another user.
-6. Join the same room, usually `lobby`.
-7. Send messages from both sides.
-8. Confirm that the messages appear in real time.
+```powershell
+docker compose up --build
+```
 
-## Chapter 14: Folder Guide
+Or start detached:
 
-### Backend
+```powershell
+docker compose up -d --build
+```
 
-- `controller/` REST and chat controllers
-- `config/` WebSocket, Kafka topic, and security config
-- `dto/` request and response objects
-- `entity/` database entities
-- `repository/` JPA repositories
-- `security/` JWT helpers and filters
-- `service/` Kafka producer and consumer logic
+### 3) Check Running Containers
 
-### Frontend
+```powershell
+docker ps
+```
 
-- `chat-app.ts` application shell
-- `chat-page.ts` main chat room UI
-- `login-page.ts` login and signup UI
-- `main.ts` bootstrap entry
-- `shim.ts` browser compatibility shim
+You should see containers for Zookeeper, Kafka, backend, and frontend.
 
-## Chapter 15: Configuration Notes
+### 4) Verify Frontend and Backend
 
-- The default room is `lobby`
-- Kafka topic used by the app is `chat-messages`
-- Backend port is `8080`
-- Frontend is served on `80` in Docker
-- The frontend Nginx config proxies `/api` and `/ws` to the backend
+- Frontend: `http://localhost`
+- Backend: `http://localhost:8080`
+- H2 console: `http://localhost:8080/h2-console`
 
-## Chapter 16: Troubleshooting
+### 5) View Logs
 
-- **Page does not load:** Confirm Docker Desktop is running and port `80` is free
-- **Login fails:** Sign up first, then log in with the same credentials
-- **Messages do not show:** Check browser dev tools and backend logs
-- **Kafka unavailable:** Start Kafka or use Docker Compose
-- **SockJS error about `global`:** Refresh after the frontend build; the project includes a browser shim
-- **Backend starts but Kafka is down:** The app can still boot, but Kafka persistence is unavailable until the broker is reachable
+```powershell
+docker compose logs
+```
 
-## Chapter 17: Advanced Topics Covered By This Project
+For a specific service:
 
-- Event-driven architecture
-- Loose coupling between services
-- Message durability and replay
-- Consumer groups and scaling
-- STOMP destinations and subscriptions
-- JWT-based access control
-- Optimistic UI design
-- Container orchestration
+```powershell
+docker compose logs backend
+docker compose logs kafka
+docker compose logs frontend
+docker compose logs zookeeper
+```
 
-## Chapter 18: Interview Questions and Answers
+### 6) Stop Services
 
-### 1. What is Apache Kafka?
+```powershell
+docker compose down
+```
 
-Kafka is a distributed event streaming platform used to publish, store, and consume records in real time.
+### 7) Clean Containers, Networks, and Volumes
 
-### 2. Why is Kafka used in this project?
+```powershell
+docker compose down -v
+```
 
-It decouples message production from delivery, improves scalability, and makes chat message flow more reliable.
+> **Tip:** Use `-v` when you want to reset Kafka data and start with a clean state.
 
-### 3. What is a Kafka topic?
+## Hybrid Development Modes
 
-A topic is a named stream where producers write events and consumers read them.
+Hybrid setups are useful when you want to debug one layer locally while leaving the rest containerized.
 
-### 4. What is a producer?
+### Mode 1: Local Frontend + Local Backend + Docker Kafka
 
-A producer sends data to Kafka.
+Use this when you want to iterate quickly on UI and API code but keep Kafka isolated in Docker.
 
-### 5. What is a consumer?
+Requirements:
 
-A consumer reads data from Kafka.
+- Local backend must connect to a host-accessible Kafka broker
+- Kafka must advertise an address the backend can reach, usually `localhost:9092`
 
-### 6. What is the role of WebSocket here?
+Typical backend setting:
 
-WebSocket keeps a live connection open so chat updates can reach users instantly.
+```text
+SPRING_KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+```
 
-### 7. Why use STOMP on top of WebSocket?
+> **Note:** A Kafka container that only advertises `kafka:9092` is not enough for a host-run backend. It must also expose a host-reachable listener.
 
-STOMP adds a simple message protocol with destinations, subscriptions, and headers.
+### Mode 2: Local Frontend + Docker Backend + Docker Kafka
 
-### 8. Why use SockJS?
+Use this when you want to keep the browser UI local while validating the backend and messaging stack in containers.
 
-SockJS provides browser-friendly fallback support for the WebSocket transport.
+Requirements:
 
-### 9. Why use JWT?
+- Backend container must expose port `8080`
+- Frontend must proxy to `http://localhost:8080`
 
-JWT lets the frontend prove the user is authenticated without keeping server sessions.
+This repository already supports that pattern through the Vite proxy in development and the Docker port mapping in Compose.
 
-### 10. Where is the JWT used?
+### When Each Mode Is Useful
 
-It is used for REST login/session flow and also sent in the STOMP CONNECT headers.
+- Local frontend + local backend + local Kafka: fastest debugging of all code on your machine
+- Local frontend + Docker backend + Docker Kafka: good for validating backend container behavior
+- Full Docker Compose: best for consistent demos, onboarding, and integration testing
 
-### 11. Why use H2 in this project?
+## Kafka Configuration
 
-H2 is lightweight and ideal for demos, learning, and quick local testing.
+Kafka networking is the most important part of this project because it determines whether the backend can actually produce and consume messages.
 
-### 12. Why is Docker Compose useful here?
+### `localhost:9092`
 
-It starts Kafka, backend, and frontend together with one command.
+Use `localhost:9092` when the backend is running on your machine and Kafka is reachable from the host network.
 
-### 13. What is optimistic UI?
+This is the default in `backend/src/main/resources/application.yml`:
 
-It means showing the message immediately before server confirmation to make the app feel faster.
+```yaml
+spring:
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+```
 
-### 14. Why do we need `messageId`?
+### `kafka:9092`
 
-It helps prevent duplicate rendering when the same message appears from both local UI and Kafka broadcast.
+Use `kafka:9092` when the backend runs inside the same Docker Compose network as the Kafka container.
 
-### 15. What is the advantage of room-based topics?
+That value works only inside the Docker network because `kafka` is a Compose service name, not a DNS name on your host machine.
 
-Each room can receive only its own messages, which keeps subscriptions organized and scalable.
+### Local vs Docker Networking
 
-### 16. What happens if Kafka is down?
+- Local mode uses host networking, so services talk through `localhost`
+- Docker Compose mode uses an internal bridge network, so services talk through service names such as `kafka` and `backend`
 
-The backend can still start, but Kafka-backed persistence and replay are not available until Kafka comes back.
+### `KAFKA_ADVERTISED_LISTENERS`
 
-### 17. What is the difference between REST and WebSocket?
+Kafka returns its reachable address to clients using advertised listeners.
 
-REST is request-response, while WebSocket is a persistent bidirectional connection.
+- For Docker-to-Docker communication, the broker can advertise `kafka:9092`
+- For host-to-Docker communication, the broker must also advertise a host-reachable listener such as `localhost:9092`
 
-### 18. What is the main learning takeaway from this project?
+If the advertised listener is wrong, your backend may connect, then fail as soon as Kafka redirects it to an unreachable address.
 
-How authentication, messaging, and real-time delivery work together in a modern distributed app.
+### `SPRING_KAFKA_BOOTSTRAP_SERVERS`
 
-## Chapter 19: Common Interview Follow-Ups
+This environment variable overrides the Spring Boot Kafka bootstrap server list.
 
-- How would you scale this chat app?
-- How would you store chat history permanently?
-- How would you add read receipts?
-- How would you support many rooms and millions of messages?
-- How would you secure WebSocket connections in production?
+Examples:
 
-## Chapter 20: Next Learning Steps
+```powershell
+$env:SPRING_KAFKA_BOOTSTRAP_SERVERS='localhost:9092'
+```
 
-- Add message persistence in a real database
-- Add user presence and typing indicators
-- Add pagination for older messages
-- Add Kafka partitions and consumer groups for scale testing
-- Add tests for REST, WebSocket, and Kafka flows
+```powershell
+$env:SPRING_KAFKA_BOOTSTRAP_SERVERS='kafka:9092'
+```
 
-## Chapter 21: Related Files
+## Environment Configuration
 
-- [backend/pom.xml](backend/pom.xml)
-- [backend/src/main/resources/application.yml](backend/src/main/resources/application.yml)
-- [docker-compose.yml](docker-compose.yml)
-- [frontend/package.json](frontend/package.json)
+Spring Boot supports both `application.properties` and `application.yml`. This repository currently uses `application.yml`, but the same structure can be split into profile-specific files if needed.
 
-## Closing Notes
+### Recommended Configuration Pattern
 
-This project is intentionally small enough to understand, but complete enough to teach real architecture.
+- `application.yml`: shared defaults
+- `application-local.properties` or `application-local.yml`: local host settings
+- `application-docker.properties` or `application-docker.yml`: container settings
 
-If you study it carefully, you will learn:
+### Spring Profiles
 
-- how a secure real-time system is structured
-- how Kafka fits into an application
-- how frontend and backend coordinate in real time
-- how to explain the design in an interview
+Spring profiles let you activate different settings for different environments.
+
+Examples:
+
+```powershell
+$env:SPRING_PROFILES_ACTIVE='local'
+```
+
+```powershell
+$env:SPRING_PROFILES_ACTIVE='docker'
+```
+
+### Practical Notes
+
+- Use local profiles for `localhost:9092`, local H2 settings, and direct browser access
+- Use Docker profiles for `kafka:9092`, Compose service names, and container-friendly networking
+
+> **Tip:** If you add profile files later, keep the shared defaults in one base file and only override environment-specific values.
+
+## Common Commands
+
+```powershell
+docker compose up --build
+docker compose up -d
+docker compose down
+docker compose down -v
+docker compose logs
+docker ps
+docker images
+```
+
+Additional useful commands:
+
+```powershell
+docker compose logs backend
+docker compose logs kafka
+docker compose logs frontend
+docker compose logs zookeeper
+```
+
+## Troubleshooting
+
+### Kafka Not Starting
+
+Possible fixes:
+
+- Check that Zookeeper is running first
+- Confirm port `2181` is free
+- Confirm port `9092` is free
+- Review Kafka logs for listener and broker ID errors
+
+### Zookeeper Configuration Errors
+
+Possible fixes:
+
+- Verify `ZOOKEEPER_CLIENT_PORT=2181`
+- Ensure the Zookeeper container can write to its data directory
+- Restart the stack with `docker compose down -v` if old volumes are corrupt
+
+### Kafka Advertised Listeners Issues
+
+Symptoms:
+
+- Backend connects briefly, then disconnects
+- Producer or consumer cannot resolve the broker after the first metadata request
+
+Fixes:
+
+- Use a host-reachable listener for local development
+- Use `kafka:9092` only inside Docker Compose networking
+- Make sure `KAFKA_ADVERTISED_LISTENERS` matches the actual client location
+
+### Backend Cannot Connect to Kafka
+
+Possible fixes:
+
+- Confirm `SPRING_KAFKA_BOOTSTRAP_SERVERS` is set correctly
+- Confirm Kafka is reachable at the configured host and port
+- Check whether the backend is running on the host or inside Docker
+- Make sure the broker address advertised by Kafka is resolvable from the backend
+
+### Docker Desktop WSL Issues
+
+Possible fixes:
+
+- Restart Docker Desktop
+- Make sure WSL integration is enabled
+- Check that your distro has access to Docker resources
+- Rebuild images after restarting Docker
+
+### Port Conflicts
+
+Common ports used by this project:
+
+- `80` for frontend in Docker
+- `8080` for backend
+- `5173` for frontend dev server
+- `9092` for Kafka
+- `2181` for Zookeeper
+
+Possible fixes:
+
+- Stop the process using the port
+- Change the mapping in `docker-compose.yml`
+- Restart the stack after freeing the port
+
+### Container Networking Issues
+
+Possible fixes:
+
+- Use service names inside Docker Compose, not `localhost`
+- Use `localhost` from the host machine, not a container service name
+- Check that the backend and Kafka containers are on the same Compose network
+
+## Production Deployment
+
+This project is a strong starting point for production deployment, but a few production concerns should be addressed before going live.
+
+### Render Deployment Considerations
+
+- Deploy the backend as a web service or containerized app
+- Use managed Kafka if the platform supports it
+- Move secrets and JWT keys into environment variables
+- Replace in-memory or demo-only storage with a production database
+
+### VPS Deployment
+
+- Run backend, frontend, and Kafka on separate services or containers
+- Use systemd or Docker Compose to manage service startup
+- Persist Kafka data on a durable volume
+- Monitor CPU, memory, and disk usage carefully
+
+### Reverse Proxy with Nginx
+
+- Terminate TLS at the proxy layer
+- Route `/api` and `/ws` to the backend
+- Serve the frontend as static content
+- Keep WebSocket upgrade headers enabled
+
+### SSL Setup
+
+- Use a valid certificate from a trusted CA
+- Redirect HTTP to HTTPS
+- Make sure WebSocket clients use `wss://` in secure environments
+
+### External Kafka Services
+
+- Consider managed Kafka for production reliability
+- Update `SPRING_KAFKA_BOOTSTRAP_SERVERS` to the provider endpoint
+- Configure TLS, authentication, and ACLs if required
+
+### CI/CD Overview
+
+A practical CI/CD flow usually includes:
+
+1. Build and test the backend
+2. Build the frontend
+3. Build Docker images
+4. Push images to a registry
+5. Deploy Compose or platform manifests
+6. Run smoke checks against `/api`, `/ws`, and the UI
+
+## Contributing
+
+Contributions are welcome.
+
+Suggested workflow:
+
+1. Fork the repository.
+2. Create a feature branch.
+3. Make focused changes with clear commit messages.
+4. Test both local and Docker modes when your change affects runtime behavior.
+5. Open a pull request with a short summary and validation notes.
+
+## License
+
+No explicit license is currently declared in this repository.
+
+If you intend to publish or distribute the project, add a `LICENSE` file with the license terms you want to apply.

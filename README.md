@@ -6,6 +6,8 @@ This repository includes multiple chat applications, and this handbook explains 
 
 If you want the runnable project documentation, also read [a4-chatapp-kafka-server-client-based/README.md](a4-chatapp-kafka-server-client-based/README.md).
 
+For advanced topics, examples, and deep-dive projects see [a5-advanced-kafka-topics/README.md](a5-advanced-kafka-topics/README.md).
+
 ## How To Use This Handbook
 
 Read it in order if Kafka is new to you.
