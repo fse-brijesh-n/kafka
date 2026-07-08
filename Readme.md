@@ -1,3 +1,4 @@
+```
 LEVEL 0: FOUNDATIONS
 ├── 0.1 Problem Kafka Solves (Decoupling, Async)
 ├── 0.2 What is Kafka (Event Streaming Platform)
@@ -62,3 +63,4 @@ LEVEL 10: REAL-WORLD ARCHITECTURES
 ├── 10.3 Saga Pattern
 ├── 10.4 Event Sourcing
 └── 10.5 Anti-Patterns
+```
